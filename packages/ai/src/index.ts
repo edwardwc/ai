@@ -33,6 +33,7 @@ export * from './generate-speech';
 export * from './generate-text';
 export * from './generate-video';
 export * from './logger';
+export * from './live';
 export * from './middleware';
 export * from './prompt';
 export * from './registry';

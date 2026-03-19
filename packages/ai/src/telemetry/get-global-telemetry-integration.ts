@@ -25,6 +25,10 @@ export function bindTelemetryIntegration(
     onChunk: integration.onChunk?.bind(integration),
     onStepFinish: integration.onStepFinish?.bind(integration),
     onFinish: integration.onFinish?.bind(integration),
+    onLiveStart: integration.onLiveStart?.bind(integration),
+    onLiveTurnStart: integration.onLiveTurnStart?.bind(integration),
+    onLiveTurnFinish: integration.onLiveTurnFinish?.bind(integration),
+    onLiveFinish: integration.onLiveFinish?.bind(integration),
     onError: integration.onError?.bind(integration),
     executeTool: integration.executeTool?.bind(integration),
   };
@@ -93,6 +97,18 @@ export function getGlobalTelemetryIntegration<
         integration => integration.onStepFinish,
       ),
       onFinish: createTelemetryComposite(integration => integration.onFinish),
+      onLiveStart: createTelemetryComposite(
+        integration => integration.onLiveStart,
+      ),
+      onLiveTurnStart: createTelemetryComposite(
+        integration => integration.onLiveTurnStart,
+      ),
+      onLiveTurnFinish: createTelemetryComposite(
+        integration => integration.onLiveTurnFinish,
+      ),
+      onLiveFinish: createTelemetryComposite(
+        integration => integration.onLiveFinish,
+      ),
       onError: createTelemetryComposite(integration => integration.onError),
       executeTool:
         executeWrappers.length > 0

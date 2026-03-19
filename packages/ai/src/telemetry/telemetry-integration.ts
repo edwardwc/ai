@@ -7,6 +7,12 @@ import type {
   OnToolCallFinishEvent,
   OnToolCallStartEvent,
 } from '../generate-text/core-events';
+import type {
+  OnLiveFinishEvent,
+  OnLiveStartEvent,
+  OnLiveTurnFinishEvent,
+  OnLiveTurnStartEvent,
+} from '../live/live-events';
 import type { Output } from '../generate-text/output';
 import type { ToolSet } from '../generate-text/tool-set';
 import { Listener } from '../util/notify';
@@ -73,6 +79,26 @@ export interface TelemetryIntegration {
    * (`totalUsage`).
    */
   onFinish?: Listener<OnFinishEvent<ToolSet>>;
+
+  /**
+   * Called when a live session begins.
+   */
+  onLiveStart?: Listener<OnLiveStartEvent<ToolSet>>;
+
+  /**
+   * Called when a live turn begins.
+   */
+  onLiveTurnStart?: Listener<OnLiveTurnStartEvent>;
+
+  /**
+   * Called when a live turn completes.
+   */
+  onLiveTurnFinish?: Listener<OnLiveTurnFinishEvent<ToolSet>>;
+
+  /**
+   * Called when a live session finishes.
+   */
+  onLiveFinish?: Listener<OnLiveFinishEvent<ToolSet>>;
 
   /**
    * Called when an unrecoverable error occurs during the generation lifecycle.

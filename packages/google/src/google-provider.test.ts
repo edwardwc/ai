@@ -3,6 +3,7 @@ import { createGoogleGenerativeAI } from './google-provider';
 import { GoogleGenerativeAILanguageModel } from './google-generative-ai-language-model';
 import { GoogleGenerativeAIEmbeddingModel } from './google-generative-ai-embedding-model';
 import { GoogleGenerativeAIImageModel } from './google-generative-ai-image-model';
+import { GoogleGenerativeAILiveModel } from './google-live-model';
 import { GoogleGenerativeAIVideoModel } from './google-generative-ai-video-model';
 
 // Mock the imported modules using a partial mock to preserve original exports
@@ -25,6 +26,9 @@ vi.mock('./google-generative-ai-embedding-model', () => ({
 }));
 vi.mock('./google-generative-ai-image-model', () => ({
   GoogleGenerativeAIImageModel: vi.fn(),
+}));
+vi.mock('./google-live-model', () => ({
+  GoogleGenerativeAILiveModel: vi.fn(),
 }));
 vi.mock('./google-generative-ai-video-model', () => ({
   GoogleGenerativeAIVideoModel: vi.fn(),
@@ -180,6 +184,26 @@ describe('google-provider', () => {
         provider: 'google.generative-ai',
         headers: expect.any(Function),
         baseURL: 'https://generativelanguage.googleapis.com/v1beta',
+      }),
+    );
+  });
+
+  it('should create a live model with default live settings', () => {
+    const provider = createGoogleGenerativeAI({
+      apiKey: 'test-api-key',
+    });
+
+    provider.live('gemini-2.5-flash-native-audio-preview-12-2025');
+
+    expect(GoogleGenerativeAILiveModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'google.generative-ai.live',
+        modelId: 'gemini-2.5-flash-native-audio-preview-12-2025',
+        liveBaseURL: 'https://generativelanguage.googleapis.com',
+        liveApiVersion: 'v1alpha',
+        headers: expect.any(Function),
+        apiKey: expect.any(Function),
+        generateId: expect.any(Function),
       }),
     );
   });

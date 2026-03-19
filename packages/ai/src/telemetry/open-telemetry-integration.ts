@@ -18,6 +18,12 @@ import type {
   OnToolCallFinishEvent,
   OnToolCallStartEvent,
 } from '../generate-text/core-events';
+import type {
+  OnLiveFinishEvent,
+  OnLiveStartEvent,
+  OnLiveTurnFinishEvent,
+  OnLiveTurnStartEvent,
+} from '../live/live-events';
 import type { Output } from '../generate-text/output';
 import type { ToolSet } from '../generate-text/tool-set';
 import { assembleOperationName } from './assemble-operation-name';
@@ -111,6 +117,8 @@ interface CallState {
   rootContext: Context | undefined;
   stepSpan: Span | undefined;
   stepContext: Context | undefined;
+  liveTurnSpan: Span | undefined;
+  liveTurnContext: Context | undefined;
   toolSpans: Map<string, { span: Span; context: Context }>;
   baseTelemetryAttributes: Attributes;
   settings: Record<string, unknown>;
@@ -216,6 +224,8 @@ export class OpenTelemetryIntegration implements TelemetryIntegration {
       rootContext,
       stepSpan: undefined,
       stepContext: undefined,
+      liveTurnSpan: undefined,
+      liveTurnContext: undefined,
       toolSpans: new Map(),
       baseTelemetryAttributes,
       settings,
@@ -289,9 +299,12 @@ export class OpenTelemetryIntegration implements TelemetryIntegration {
 
   onToolCallStart(event: OnToolCallStartEvent<ToolSet>): void {
     const state = this.getCallState(event.callId);
-    if (!state?.stepContext) return;
+    if (!state) return;
 
-    const { telemetry } = state;
+    const parentContext = state.stepContext ?? state.liveTurnContext;
+    if (parentContext == null) return;
+
+    const telemetry = state.telemetry;
     const { toolCall } = event;
 
     const attributes = selectAttributes(telemetry, {
@@ -309,9 +322,9 @@ export class OpenTelemetryIntegration implements TelemetryIntegration {
     const toolSpan = this.tracer.startSpan(
       'ai.toolCall',
       { attributes },
-      state.stepContext,
+      parentContext,
     );
-    const toolContext = trace.setSpan(state.stepContext, toolSpan);
+    const toolContext = trace.setSpan(parentContext, toolSpan);
 
     state.toolSpans.set(toolCall.toolCallId, {
       span: toolSpan,
@@ -327,7 +340,7 @@ export class OpenTelemetryIntegration implements TelemetryIntegration {
     if (!toolSpanEntry) return;
 
     const { span } = toolSpanEntry;
-    const { telemetry } = state;
+    const telemetry = state.telemetry;
 
     if (event.success) {
       try {
@@ -470,6 +483,139 @@ export class OpenTelemetryIntegration implements TelemetryIntegration {
           event.totalUsage.outputTokenDetails?.textTokens,
         'ai.usage.outputTokenDetails.reasoningTokens':
           event.totalUsage.outputTokenDetails?.reasoningTokens,
+      }),
+    );
+
+    state.rootSpan.end();
+    this.cleanupCallState(event.callId);
+  }
+
+  onLiveStart(event: OnLiveStartEvent<ToolSet>): void {
+    if (event.isEnabled !== true) return;
+
+    const telemetry: TelemetrySettings = {
+      isEnabled: event.isEnabled,
+      recordInputs: event.recordInputs,
+      recordOutputs: event.recordOutputs,
+      functionId: event.functionId,
+      metadata: event.metadata as Record<string, any> | undefined,
+    };
+
+    const baseTelemetryAttributes = getBaseTelemetryAttributes({
+      model: { provider: event.provider, modelId: event.modelId },
+      telemetry,
+      headers: undefined,
+      settings: {},
+    });
+
+    const attributes = selectAttributes(telemetry, {
+      ...assembleOperationName({
+        operationId: 'ai.liveSession',
+        telemetry,
+      }),
+      ...baseTelemetryAttributes,
+      'ai.model.provider': event.provider,
+      'ai.model.id': event.modelId,
+      'ai.live.config': {
+        input: () => JSON.stringify(event.config),
+      },
+    });
+
+    const rootSpan = this.tracer.startSpan('ai.liveSession', { attributes });
+    const rootContext = trace.setSpan(context.active(), rootSpan);
+
+    this.callStates.set(event.callId, {
+      operationId: 'ai.liveSession',
+      telemetry,
+      rootSpan,
+      rootContext,
+      stepSpan: undefined,
+      stepContext: undefined,
+      liveTurnSpan: undefined,
+      liveTurnContext: undefined,
+      toolSpans: new Map(),
+      baseTelemetryAttributes,
+      settings: {},
+    });
+  }
+
+  onLiveTurnStart(event: OnLiveTurnStartEvent): void {
+    const state = this.getCallState(event.callId);
+    if (!state?.rootContext) return;
+
+    const attributes = selectAttributes(state.telemetry, {
+      ...assembleOperationName({
+        operationId: 'ai.liveSession.turn',
+        telemetry: state.telemetry,
+      }),
+      ...state.baseTelemetryAttributes,
+      'ai.model.provider': event.provider,
+      'ai.model.id': event.modelId,
+      'ai.live.turnNumber': event.turnNumber,
+      'ai.live.userTranscript': {
+        input: () => event.userTranscript,
+      },
+      'gen_ai.system': event.provider,
+      'gen_ai.request.model': event.modelId,
+    });
+
+    state.liveTurnSpan = this.tracer.startSpan(
+      'ai.liveSession.turn',
+      { attributes },
+      state.rootContext,
+    );
+    state.liveTurnContext = trace.setSpan(state.rootContext, state.liveTurnSpan);
+  }
+
+  onLiveTurnFinish(event: OnLiveTurnFinishEvent<ToolSet>): void {
+    const state = this.getCallState(event.callId);
+    if (!state?.liveTurnSpan) return;
+
+    state.liveTurnSpan.setAttributes(
+      selectAttributes(state.telemetry, {
+        'ai.response.text': {
+          output: () => event.assistantTranscript,
+        },
+        'ai.response.toolCalls': {
+          output: () =>
+            event.toolCalls.length > 0
+              ? JSON.stringify(
+                  event.toolCalls.map(toolCall => ({
+                    toolCallId: toolCall.toolCallId,
+                    toolName: toolCall.toolName,
+                    input: toolCall.input,
+                  })),
+                )
+              : undefined,
+        },
+        'ai.usage.inputTokens': event.usage.inputTokens,
+        'ai.usage.outputTokens': event.usage.outputTokens,
+        'ai.usage.totalTokens': event.usage.totalTokens,
+        'gen_ai.response.finish_reasons': [event.finishReason],
+        'gen_ai.response.model': event.modelId,
+        'gen_ai.usage.input_tokens': event.usage.inputTokens,
+        'gen_ai.usage.output_tokens': event.usage.outputTokens,
+      }),
+    );
+
+    state.liveTurnSpan.end();
+    state.liveTurnSpan = undefined;
+    state.liveTurnContext = undefined;
+  }
+
+  onLiveFinish(event: OnLiveFinishEvent<ToolSet>): void {
+    const state = this.getCallState(event.callId);
+    if (!state?.rootSpan) return;
+
+    state.rootSpan.setAttributes(
+      selectAttributes(state.telemetry, {
+        'ai.live.turnCount': event.turnCount,
+        'ai.response.text': {
+          output: () => event.lastAssistantTranscript,
+        },
+        'ai.usage.inputTokens': event.usage.inputTokens,
+        'ai.usage.outputTokens': event.usage.outputTokens,
+        'ai.usage.totalTokens': event.usage.totalTokens,
       }),
     );
 

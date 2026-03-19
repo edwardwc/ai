@@ -1,5 +1,17 @@
 export type { GoogleErrorData } from './google-error';
 export type {
+  GoogleLiveAuthToken,
+  GoogleLiveConfig,
+  GoogleLiveConnectOptions,
+  GoogleLiveCreateAuthTokenOptions,
+  GoogleLiveModel,
+  GoogleLivePreparedToolsResult,
+  GoogleLiveSession,
+  GoogleLiveTool,
+  GoogleLiveWebSocketFactory,
+  GoogleLiveWebSocketLike,
+} from './google-live-types';
+export type {
   GoogleLanguageModelOptions,
   /** @deprecated Use `GoogleLanguageModelOptions` instead. */
   GoogleLanguageModelOptions as GoogleGenerativeAIProviderOptions,

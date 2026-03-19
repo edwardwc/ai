@@ -6,6 +6,7 @@ export * from './json-value/index';
 export * from './language-model-middleware/index';
 export * from './embedding-model-middleware/index';
 export * from './language-model/index';
+export * from './live-model/index';
 export * from './provider/index';
 export * from './reranking-model/index';
 export * from './shared/index';

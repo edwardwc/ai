@@ -1,5 +1,6 @@
 import {
   EmbeddingModelV4,
+  Experimental_LiveModelV1,
   Experimental_VideoModelV4,
   ImageModelV4,
   LanguageModelV4,
@@ -9,6 +10,7 @@ import {
   FetchFunction,
   generateId,
   loadApiKey,
+  loadOptionalSetting,
   withoutTrailingSlash,
   withUserAgentSuffix,
 } from '@ai-sdk/provider-utils';
@@ -24,6 +26,8 @@ import {
   GoogleGenerativeAIImageModelId,
 } from './google-generative-ai-image-settings';
 import { GoogleGenerativeAIImageModel } from './google-generative-ai-image-model';
+import { GoogleGenerativeAILiveModel } from './google-live-model';
+import { GoogleLiveModel, GoogleLiveWebSocketFactory } from './google-live-types';
 import { GoogleGenerativeAIVideoModel } from './google-generative-ai-video-model';
 import { GoogleGenerativeAIVideoModelId } from './google-generative-ai-video-settings';
 
@@ -81,6 +85,16 @@ export interface GoogleGenerativeAIProvider extends ProviderV4 {
     modelId: GoogleGenerativeAIVideoModelId,
   ): Experimental_VideoModelV4;
 
+  /**
+   * Creates a model for Gemini Live sessions.
+   */
+  live(modelId: GoogleGenerativeAIModelId): GoogleLiveModel;
+
+  /**
+   * Creates a model for Gemini Live sessions.
+   */
+  liveModel(modelId: GoogleGenerativeAIModelId): GoogleLiveModel;
+
   tools: typeof googleTools;
 }
 
@@ -109,6 +123,22 @@ export interface GoogleGenerativeAIProviderSettings {
   fetch?: FetchFunction;
 
   /**
+   * Optional base URL for Gemini Live token creation and WebSocket connections.
+   * Defaults to `https://generativelanguage.googleapis.com`.
+   */
+  liveBaseURL?: string;
+
+  /**
+   * Live API version. Defaults to `v1alpha`.
+   */
+  liveApiVersion?: string;
+
+  /**
+   * Optional WebSocket factory used for Gemini Live connections.
+   */
+  createWebSocket?: GoogleLiveWebSocketFactory;
+
+  /**
    * Optional function to generate a unique ID for each request.
    */
   generateId?: () => string;
@@ -129,8 +159,16 @@ export function createGoogleGenerativeAI(
   const baseURL =
     withoutTrailingSlash(options.baseURL) ??
     'https://generativelanguage.googleapis.com/v1beta';
+  const liveBaseURL =
+    withoutTrailingSlash(options.liveBaseURL) ??
+    'https://generativelanguage.googleapis.com';
 
   const providerName = options.name ?? 'google.generative-ai';
+  const getOptionalApiKey = () =>
+    loadOptionalSetting({
+      settingValue: options.apiKey,
+      environmentVariableName: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    });
 
   const getHeaders = () =>
     withUserAgentSuffix(
@@ -140,6 +178,14 @@ export function createGoogleGenerativeAI(
           environmentVariableName: 'GOOGLE_GENERATIVE_AI_API_KEY',
           description: 'Google Generative AI',
         }),
+        ...options.headers,
+      },
+      `ai-sdk/google/${VERSION}`,
+    );
+
+  const getLiveHeaders = () =>
+    withUserAgentSuffix(
+      {
         ...options.headers,
       },
       `ai-sdk/google/${VERSION}`,
@@ -194,6 +240,19 @@ export function createGoogleGenerativeAI(
       generateId: options.generateId ?? generateId,
     });
 
+  const createLiveModel = (modelId: GoogleGenerativeAIModelId) =>
+    new GoogleGenerativeAILiveModel({
+      provider: `${providerName}.live`,
+      modelId,
+      liveBaseURL,
+      liveApiVersion: options.liveApiVersion ?? 'v1alpha',
+      headers: getLiveHeaders,
+      apiKey: getOptionalApiKey,
+      fetch: options.fetch,
+      createWebSocket: options.createWebSocket,
+      generateId: options.generateId ?? generateId,
+    });
+
   const provider = function (modelId: GoogleGenerativeAIModelId) {
     if (new.target) {
       throw new Error(
@@ -214,6 +273,8 @@ export function createGoogleGenerativeAI(
   provider.textEmbeddingModel = createEmbeddingModel;
   provider.image = createImageModel;
   provider.imageModel = createImageModel;
+  provider.live = createLiveModel;
+  provider.liveModel = createLiveModel;
   provider.video = createVideoModel;
   provider.videoModel = createVideoModel;
   provider.tools = googleTools;
