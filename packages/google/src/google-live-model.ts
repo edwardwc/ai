@@ -369,7 +369,7 @@ function buildAuthTokenPayload(
     payload.bidiGenerateContentSetup = buildSetupPayload(
       modelId,
       options.config,
-    );
+    ).setup;
 
     if (options.lockedFields != null) {
       const fieldMask = [
@@ -691,7 +691,7 @@ export class GoogleGenerativeAILiveModel implements GoogleLiveModel {
 
     const headers = await resolve(this.config.headers);
     const response = await postJsonToApi({
-      url: `${this.config.liveBaseURL}/auth_tokens`,
+      url: `${this.config.liveBaseURL}/${this.config.liveApiVersion}/auth_tokens`,
       headers: {
         ...headers,
         'x-goog-api-key': apiKey,
